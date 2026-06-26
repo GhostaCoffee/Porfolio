@@ -1,0 +1,104 @@
+---
+title: "Building a Local RAG System with Ollama and Qdrant"
+date: 2026-01-15
+updatedAt: 2026-03-02
+excerpt: "How I built a fully local RAG pipeline that runs entirely on my machine — no API keys, no cloud, no costs."
+tags: ["AI", "Python", "RAG"]
+published: true
+---
+
+## What is RAG?
+
+RAG stands for **Retrieval Augmented Generation**. Instead of asking an LLM to answer from its training data alone, you feed it relevant documents at query time so it can ground its response in your actual data.
+
+The typical flow:
+
+1. Chunk your documents
+2. Embed each chunk into a vector
+3. Store vectors in a vector database
+4. At query time — embed the question, find similar chunks, inject them into the prompt
+
+## Why local?
+
+Running everything locally means:
+
+- No API costs
+- Your data never leaves your machine
+- Works offline
+- You can swap models freely
+
+## The stack
+
+```python
+# Core dependencies
+ollama          # LLM + embeddings
+qdrant-client   # vector store
+langchain       # document loading + chunking
+PyPDF2          # PDF parsing
+```
+
+## Loading and chunking the document
+
+```python
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+loader = PyPDFLoader("your_doc.pdf")
+pages = loader.load()
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=50
+)
+chunks = splitter.split_documents(pages)
+```
+
+## Embedding and storing
+
+```python
+import ollama
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance, PointStruct
+
+client = QdrantClient(":memory:")
+
+client.create_collection(
+    collection_name="docs",
+    vectors_config=VectorParams(size=768, distance=Distance.COSINE)
+)
+
+points = []
+for i, chunk in enumerate(chunks):
+    response = ollama.embeddings(model="nomic-embed-text", prompt=chunk.page_content)
+    points.append(PointStruct(id=i, vector=response["embedding"], payload={"text": chunk.page_content}))
+
+client.upsert(collection_name="docs", points=points)
+```
+
+## Querying
+
+```python
+def query(question: str) -> str:
+    q_vec = ollama.embeddings(model="nomic-embed-text", prompt=question)["embedding"]
+    results = client.search(collection_name="docs", query_vector=q_vec, limit=3)
+    context = "\n\n".join([r.payload["text"] for r in results])
+
+    response = ollama.chat(
+        model="llama3.1:8b",
+        messages=[{
+            "role": "user",
+            "content": f"Answer based on the context below.\n\nContext:\n{context}\n\nQuestion: {question}"
+        }]
+    )
+    return response["message"]["content"]
+
+print(query("What are the main findings?"))
+```
+
+## Results
+
+The system works surprisingly well for technical documents. Retrieval quality depends heavily on chunk size — I found 500 tokens with 50 overlap to be a solid baseline.
+
+> The whole pipeline runs in under 2 seconds on my machine with an RTX 3060.
+
+Next step: add a proper Streamlit UI and persistent storage so I can query different documents without re-embedding every time.

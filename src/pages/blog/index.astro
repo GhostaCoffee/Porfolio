@@ -1,0 +1,119 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+
+const allPosts = await getCollection('blog', ({ data }) => data.published);
+const posts = allPosts.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+const allTags = [...new Set(posts.flatMap(p => p.data.tags))];
+---
+<Base title="Blog — Muhammad Ahmad Khan">
+  <div style="padding: 0 20px;">
+    <div style="max-width: 900px; margin: 0 auto; padding: 40px 0;">
+
+      <!-- NAV -->
+      <nav style="display:flex;align-items:center;justify-content:space-between;margin-bottom:60px;" class="anim-fade-down">
+        <a href="/" style="color:var(--accent);text-decoration:none;font-size:14px;font-family:'Courier New',monospace;display:flex;align-items:center;gap:6px;" class="back-link">← back to portfolio</a>
+        <span style="font-size:14px;color:var(--text-secondary);font-family:'Courier New',monospace;">ahmad@blog</span>
+      </nav>
+
+      <!-- HEADER -->
+      <div style="margin-bottom:50px;" class="anim-fade-in delay-2">
+        <h1 style="font-size:38px;font-weight:700;margin-bottom:8px;">the <span style="color:var(--accent);"></span> blog</h1>
+        <p style="color:var(--text-secondary);font-size:15px;">thoughts, writeups, and things I find interesting.</p>
+      </div>
+
+      <!-- TAG FILTER -->
+      {allTags.length > 0 && (
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:36px;" class="anim-fade-in delay-2" id="filterBar">
+          <button class="filter-btn active" data-tag="all">all</button>
+          {allTags.map(tag => (
+            <button class="filter-btn" data-tag={tag}>{tag}</button>
+          ))}
+        </div>
+      )}
+
+      <!-- POSTS -->
+      <div style="display:grid;gap:20px;" class="anim-fade-up delay-3" id="postsGrid">
+        {posts.length === 0 ? (
+          <div style="text-align:center;padding:80px 24px;color:var(--text-secondary);font-family:'Courier New',monospace;font-size:14px;border:1px dashed rgba(100,255,218,0.15);border-radius:10px;">
+            <span style="color:var(--accent);display:block;font-size:18px;margin-bottom:12px;">// posts incoming</span>
+            Nothing here yet — first one's loading...
+          </div>
+        ) : (
+          posts.map(post => {
+            const day = String(post.data.date.getDate()).padStart(2, '0');
+            const monthYear = post.data.date.toLocaleDateString('en-US', { month:'short', year:'numeric' });
+            return (
+              <a href={`/blog/${post.slug}`} class="blog-card" data-tags={post.data.tags.join(',')}>
+                <div style="position:relative;z-index:1;display:flex;gap:24px;align-items:flex-start;">
+                  <div style="min-width:80px;">
+                    <div style="font-size:32px;font-weight:700;color:var(--accent);line-height:1;font-family:'Courier New',monospace;">{day}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:1px;margin-top:2px;">{monthYear}</div>
+                  </div>
+                  <div style="flex:1;">
+                    {post.data.tags.length > 0 && (
+                      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+                        {post.data.tags.map(t => (
+                          <span style="font-size:11px;background:rgba(100,255,218,0.1);color:var(--accent);padding:2px 8px;border-radius:3px;font-family:'Courier New',monospace;">{t}</span>
+                        ))}
+                      </div>
+                    )}
+                    <div style="font-size:20px;font-weight:600;color:#fff;margin-bottom:8px;line-height:1.35;">{post.data.title}</div>
+                    {post.data.excerpt && (
+                      <p style="font-size:14px;color:var(--text-secondary);line-height:1.65;margin-bottom:14px;">{post.data.excerpt}</p>
+                    )}
+                    <span style="font-size:13px;color:var(--accent);font-family:'Courier New',monospace;opacity:0.6;">read more →</span>
+                  </div>
+                </div>
+              </a>
+            );
+          })
+        )}
+      </div>
+
+    </div>
+  </div>
+</Base>
+
+<style>
+  .back-link { transition: gap 0.2s ease; }
+  .back-link:hover { gap: 10px !important; }
+
+  .filter-btn {
+    background: transparent;
+    border: 1px solid rgba(100, 255, 218, 0.2);
+    color: var(--text-secondary);
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Courier New', monospace;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(100, 255, 218, 0.06);
+  }
+</style>
+
+<script>
+  const bar = document.getElementById('filterBar');
+  const grid = document.getElementById('postsGrid');
+
+  if (bar && grid) {
+    bar.addEventListener('click', e => {
+      const btn = (e.target as HTMLElement).closest('.filter-btn') as HTMLButtonElement;
+      if (!btn) return;
+      bar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tag = btn.dataset.tag;
+      grid.querySelectorAll<HTMLAnchorElement>('.blog-card').forEach(card => {
+        if (tag === 'all') { card.style.display = 'block'; return; }
+        const tags = card.dataset.tags?.split(',') || [];
+        card.style.display = tags.includes(tag) ? 'block' : 'none';
+      });
+    });
+  }
+</script>
